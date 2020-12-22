@@ -3,6 +3,8 @@ interface ISliderOptions {
   navButtons?: [string, string]; // [prev, next]
 }
 
+type TMEvent = TouchEvent | MouseEvent;
+
 export class Slider {
   private rootContainer: HTMLElement;
   private navNextBtn: HTMLElement | null = null; 
@@ -14,6 +16,16 @@ export class Slider {
   private currentTargetPos: number = 0;
   private delta: number = 0;
   private currentSlideIndex: number = 0;
+
+  // if slide is being dragged by mouse, this variable is used as a flag
+  // to prevent infinite adding of event listener in onTouchStart method
+  private mouseMoveEventActive = false;
+
+  // bind returns NEW function, thus removeListener could not remove listener
+  // removableEvtHandlers stores binded functions to use inlisteners where needed.
+  private removableEvtHandlers = {
+    ontm: this.onTouchMove.bind(this),
+  }
 
   constructor(opts: ISliderOptions) {
     this.rootContainer = document.querySelector(opts.rootContainerSelector) as HTMLElement;
@@ -35,6 +47,9 @@ export class Slider {
       s.addEventListener('touchstart', this.onTouchStart.bind(this));
       s.addEventListener('touchmove', this.onTouchMove.bind(this));
       s.addEventListener('touchend', this.onTouchEnd.bind(this));
+
+      s.addEventListener('mousedown', this.onTouchStart.bind(this));
+      s.addEventListener('mouseup', this.onTouchEnd.bind(this));
     });
 
     if(this.navNextBtn && this.navPrevBtn) {
@@ -61,12 +76,11 @@ export class Slider {
     });
   }
 
-  private isTargetASlide(e: TouchEvent) {
-    // console.log('target is: ', e.target);
+  private isTargetASlide(e: TMEvent) {
     return this.slides.includes(e.target as HTMLElement);
   }
 
-  private getTargetTransform(e: TouchEvent) {
+  private getTargetTransform(e: TMEvent) {
     if(this.isTargetASlide(e)) {
       return parseInt(Array.from((e.target as HTMLElement).style.transform.match(/[-0-9]+/)!)[0]);
     } else {
@@ -88,22 +102,54 @@ export class Slider {
     return dir;
   }
 
-  private onTouchStart(e: TouchEvent) {
-    this.touchStartPos = e.touches[0].clientX;
+  private onTouchStart(e: TMEvent) {
+    this.touchStartPos = 'touches' in e ? e.touches[0].clientX : e.clientX;
+
+    if('touches' in e === false && !this.mouseMoveEventActive) {
+      e.preventDefault();
+      this.slides.forEach(s => {
+        s.addEventListener('mousemove', this.removableEvtHandlers.ontm);
+      });
+      this.mouseMoveEventActive = true;
+    }
+
     this.currentTargetPos = this.getTargetTransform(e);
     console.log('START', this.touchStartPos, this.currentTargetPos);
   }
-  private onTouchMove(e: TouchEvent) {
-    let { clientX } = e.touches[0];
+  private onTouchMove(e: TMEvent) {
+    let clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     this.delta = this.touchStartPos - clientX;
+
+    if('touches' in e === false && (clientX <= this.rootContainer.getBoundingClientRect().x + 20)) {
+      this.slides.forEach(s => {
+        s.removeEventListener('mousemove', this.removableEvtHandlers.ontm);
+      });
+      this.completeSlide('left');
+      this.mouseMoveEventActive = false;
+      return;
+    } else if('touches' in e === false && (clientX >= this.rootContainer.getBoundingClientRect().x + this.slides[0].offsetWidth - 20)) {
+      this.slides.forEach(s => {
+        s.removeEventListener('mousemove', this.removableEvtHandlers.ontm);
+      });
+      this.completeSlide('right');
+      this.mouseMoveEventActive = false;
+      return;
+    }
 
     this.slides.forEach(s => {
       s.style.transform = `translateX(${this.currentTargetPos - this.delta}px)`;
     });
     // console.log('MOVE', this.delta);
   }
-  private onTouchEnd(e: TouchEvent) {
-    this.touchEndPos = e.changedTouches[0].clientX;
+  private onTouchEnd(e: TMEvent) {
+    this.touchEndPos = 'changedTouches' in e ? e.changedTouches[0].clientX : e.clientX;
+    if('touches' in e === false && this.mouseMoveEventActive || (this.touchEndPos < (e.target as HTMLElement).getBoundingClientRect().x)) {
+      console.log('mouseup')
+      this.slides.forEach(s => {
+        s.removeEventListener('mousemove', this.removableEvtHandlers.ontm);
+      });
+      this.mouseMoveEventActive = false;
+    }
     this.completeSlide();
     console.log('END', this.touchEndPos);
   }
