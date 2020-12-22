@@ -120,14 +120,14 @@ export class Slider {
     let clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     this.delta = this.touchStartPos - clientX;
 
-    if('touches' in e === false && (clientX <= this.rootContainer.getBoundingClientRect().x + 20)) {
+    if('touches' in e === false && (clientX <= this.rootContainer.getBoundingClientRect().x + 40)) {
       this.slides.forEach(s => {
         s.removeEventListener('mousemove', this.removableEvtHandlers.ontm);
       });
       this.completeSlide('left');
       this.mouseMoveEventActive = false;
       return;
-    } else if('touches' in e === false && (clientX >= this.rootContainer.getBoundingClientRect().x + this.slides[0].offsetWidth - 20)) {
+    } else if('touches' in e === false && (clientX >= this.rootContainer.getBoundingClientRect().x + this.slides[0].offsetWidth - 40)) {
       this.slides.forEach(s => {
         s.removeEventListener('mousemove', this.removableEvtHandlers.ontm);
       });
